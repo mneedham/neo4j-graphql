@@ -16,15 +16,15 @@ import java.util.*
 
 class GraphQLSchemaBuilder {
 
-    fun toGraphQLInterface(md: MetaData): GraphQLInterfaceType {
-        var builder: GraphQLInterfaceType.Builder = GraphQLInterfaceType.newInterface()
-                .typeResolver { toGraphQL(GraphSchemaScanner.getMetaData(it.toString())!!) }
-                .name(md.type)
-                .description(md.type + "-Label")
-        // it uses the interface types for checking against parent-types of fields, which is weird
-        builder = addInterfaceProperties(md, builder)
-        return builder.build()
-    }
+//    fun toGraphQLInterface(md: MetaData): GraphQLInterfaceType {
+//        var builder: GraphQLInterfaceType.Builder = GraphQLInterfaceType.newInterface()
+//                .typeResolver { toGraphQL(GraphSchemaScanner.getMetaData(it.toString())!!) }
+//                .name(md.type)
+//                .description(md.type + "-Label")
+//        // it uses the interface types for checking against parent-types of fields, which is weird
+//        builder = addInterfaceProperties(md, builder)
+//        return builder.build()
+//    }
 
     private fun addInterfaceProperties(md: MetaData, builder: GraphQLInterfaceType.Builder): GraphQLInterfaceType.Builder {
         // mostly id, indexed, not sure about others
@@ -36,7 +36,28 @@ class GraphQLSchemaBuilder {
         return newBuilder
     }
 
-    fun toGraphQL(metaData: MetaData): GraphQLObjectType {
+    fun toGraphQL2(metaData: MetaData): GraphQLObjectType {
+        var builder: GraphQLObjectType.Builder = newObject()
+                    .name(metaData.type)
+                    .description(metaData.type + "-Node")
+
+            builder = builder.field(newFieldDefinition()
+                    .name("_id")
+                    .description("internal node id")
+                    //                    .fetchField().dataFetcher((env) -> null)
+                    .type(Scalars.GraphQLID).build())
+
+
+            // todo relationships, labels etc.
+
+            // something is off with rule-checking probably interface names conflicting with object names
+            //        builder = addInterfaces(builder);
+            builder = addProperties(metaData, builder)
+            builder = addRelationships(metaData, builder)
+            return builder.build()
+    }
+
+    fun toGraphQLObjectType(metaData: MetaData, interfaceDefinitions: Map<String, GraphQLInterfaceType>) : GraphQLObjectType {
         var builder: GraphQLObjectType.Builder = newObject()
                 .name(metaData.type)
                 .description(metaData.type + "-Node")
@@ -47,6 +68,7 @@ class GraphQLSchemaBuilder {
                 //                    .fetchField().dataFetcher((env) -> null)
                 .type(Scalars.GraphQLID).build())
 
+        metaData.labels.forEach { builder = builder.withInterface(interfaceDefinitions.get(it))  }
 
         // todo relationships, labels etc.
 
@@ -54,6 +76,29 @@ class GraphQLSchemaBuilder {
         //        builder = addInterfaces(builder);
         builder = addProperties(metaData, builder)
         builder = addRelationships(metaData, builder)
+        return builder.build()
+    }
+
+
+    fun toGraphQLInterfaceType(metaData: MetaData, typeResolver: (Any) -> GraphQLObjectType? ): GraphQLInterfaceType {
+        var builder: GraphQLInterfaceType.Builder = GraphQLInterfaceType.newInterface()
+                .name(metaData.type)
+                .description(metaData.type + "-Node")
+
+        builder = builder.field(newFieldDefinition()
+                .name("_id")
+                .description("internal node id")
+                //                    .fetchField().dataFetcher((env) -> null)
+                .type(Scalars.GraphQLID).build())
+
+        // todo relationships, labels etc.
+
+        // something is off with rule-checking probably interface names conflicting with object names
+        //        builder = addInterfaces(builder);
+        builder = addProperties(metaData, builder)
+        builder = addRelationships(metaData, builder)
+
+        builder = builder.typeResolver{ typeResolver("Actor") }
         return builder.build()
     }
 
@@ -65,7 +110,23 @@ class GraphQLSchemaBuilder {
         return newBuilder
     }
 
+    private fun addRelationships(md: MetaData, builder: GraphQLInterfaceType.Builder): GraphQLInterfaceType.Builder {
+        var newBuilder = builder
+        for ((key, info) in md.relationships) {
+            newBuilder = newBuilder.field(newReferenceField(md, key, info.label, info.multi, info.parameters?.values))
+        }
+        return newBuilder
+    }
+
     private fun addProperties(md: MetaData, builder: GraphQLObjectType.Builder): GraphQLObjectType.Builder {
+        var newBuilder = builder
+        for ((name, type) in md.properties) {
+            newBuilder = newBuilder.field(newField(md, name, type))
+        }
+        return newBuilder
+    }
+
+    private fun addProperties(md: MetaData, builder: GraphQLInterfaceType.Builder): GraphQLInterfaceType.Builder {
         var newBuilder = builder
         for ((name, type) in md.properties) {
             newBuilder = newBuilder.field(newField(md, name, type))
@@ -123,14 +184,14 @@ class GraphQLSchemaBuilder {
                 .build()
     }
 
-    private fun addInterfaces(md: MetaData, builder: GraphQLObjectType.Builder): GraphQLObjectType.Builder {
-        var newBuilder = builder
-        for (label in md.labels) {
-            val metaData = GraphSchemaScanner.getMetaData(label)!!
-            newBuilder = newBuilder.withInterface(toGraphQLInterface(metaData))
-        }
-        return newBuilder
-    }
+//    private fun addInterfaces(md: MetaData, builder: GraphQLObjectType.Builder): GraphQLObjectType.Builder {
+//        var newBuilder = builder
+//        for (label in md.labels) {
+//            val metaData = GraphSchemaScanner.getMetaData(label)!!
+//            newBuilder = newBuilder.withInterface(toGraphQLInterface(metaData))
+//        }
+//        return newBuilder
+//    }
 
     companion object {
         class GraphQLSchemaWithDirectives(queryType: GraphQLObjectType, mutationType: GraphQLObjectType, dictionary: Set<GraphQLType>, newDirectives : List<GraphQLDirective>)
@@ -150,20 +211,27 @@ class GraphQLSchemaBuilder {
 
             val myBuilder = GraphQLSchemaBuilder()
 
-            val mutationFields = GraphSchemaScanner.allMetaDatas().flatMap { myBuilder.relationshipMutationFields(it) + myBuilder.mutationField(it) }
+            val metaDatas = GraphSchemaScanner.allMetaDatas()
+            val typeMetaDatas = metaDatas.filterNot {  it.isInterface }
+            val mutationFields = typeMetaDatas.flatMap { myBuilder.relationshipMutationFields(it) + myBuilder.mutationField(it) }
 
             val mutationType: GraphQLObjectType = newObject().name("MutationType")
                     .fields(mutationFields)
                     .build()
 
+            val dictionary = myBuilder.graphQlTypes(metaDatas)
+
+            val interfaceTypes = dictionary.first
+            val objectTypes = dictionary.second
+
             val queryType = newObject().name("QueryType")
-                    .fields(myBuilder.queryFields(GraphSchemaScanner.allMetaDatas()))
+                    .fields(myBuilder.queryFields(typeMetaDatas,objectTypes))
                     .build()
 
-            val dictionary = myBuilder.graphQlTypes(GraphSchemaScanner.allMetaDatas())
 
             // todo this was missing, it was only called by the builder: SchemaUtil().replaceTypeReferences(graphQLSchema)
-            val schema = GraphQLSchema.Builder().mutation(mutationType).query(queryType).build(dictionary)
+            val allTypes = (objectTypes.values + interfaceTypes.values).toSet()
+            val schema = GraphQLSchema.Builder().mutation(mutationType).query(queryType).build(allTypes) // interfaces seem to be quite tricky
             return GraphQLSchemaWithDirectives(schema.queryType, schema.mutationType, schema.dictionary, graphQLDirectives())
         }
 
@@ -214,13 +282,13 @@ class GraphQLSchemaBuilder {
         return inType
     }
 
-    fun queryFields(metaDatas: Iterable<MetaData>): List<GraphQLFieldDefinition> {
+    fun queryFields(metaDatas: Iterable<MetaData>, objectTypes: Map<String, GraphQLObjectType>): List<GraphQLFieldDefinition> {
         return metaDatas
                 .map { md ->
                     withFirstOffset(
                             newFieldDefinition()
                             .name(md.type)
-                            .type(GraphQLList(toGraphQL(md)))
+                            .type(GraphQLList(objectTypes[md.type]))
                             .argument(propertiesAsArguments(md))
                             .argument(propertiesAsListArguments(md))
                             .argument(orderByArgument(md))
@@ -393,8 +461,16 @@ class GraphQLSchemaBuilder {
         }
     }
 
-    fun graphQlTypes(metaDatas: Iterable<MetaData>): Set<GraphQLType> {
-        return metaDatas.map { toGraphQL(it) }.toSet()
+    fun graphQlTypes(metaDatas: Iterable<MetaData>): Pair<Map<String,GraphQLInterfaceType>,Map<String,GraphQLObjectType>> {
+        val interfaces = metaDatas.filter { it.isInterface }
+        val nonInterfaces = metaDatas.filter { !it.isInterface }
+
+        val mutableObjectTypes = mutableMapOf<String,GraphQLObjectType>()
+        val interfaceDefinitions = interfaces.associate { it.type to toGraphQLInterfaceType(it, { mutableObjectTypes.get(it.toString()) }) }
+
+        val objectTypes = nonInterfaces.associate { it.type  to toGraphQLObjectType(it, interfaceDefinitions) }
+        mutableObjectTypes.putAll(objectTypes) // kinda weird though the cyclcic dependency, we should add _labels  to the cypher result and then decide it from there, on
+        return Pair(interfaceDefinitions, objectTypes)
     }
 
     internal fun propertiesAsArguments(md: MetaData): List<GraphQLArgument> {

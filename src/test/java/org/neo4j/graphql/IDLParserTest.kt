@@ -167,4 +167,41 @@ type Movie {
         assertEquals(md.relationships.values.iterator().next(),MetaData.RelationshipInfo("actors", "ACTED_IN", "Person", false, true))
     }
 
+    val fancyMoviesSchema = """
+interface Person {
+   name: String!
+   born: Int
+   movies: [Movie]
+}
+
+type Actor implements Person {
+   name: String!
+   born: Int
+   movies: [Movie] @relation(name:"ACTED_IN")
+}
+
+type Director implements Person {
+   name: String!
+   born: Int
+   movies: [Movie] @relation(name:"DIRECTED")
+}
+
+type Movie {
+    title: String!
+    released: Int
+    tagline: String
+    actors: [Actor] @relation(name:"ACTED_IN", direction:"IN")
+    directors: [Director] @relation(name:"DIRECTED", direction:"IN")
+    score(value:Int! = 1): Int @cypher(statement:"RETURN {value}")
+}
+"""
+
+    @Test
+    fun fancyMoviesSchema() {
+        val metaDatas = IDLParser.parse(fancyMoviesSchema)
+        // todo handle enums ?
+        println(metaDatas)
+        println(metaDatas.keys)
+    }
+
 }
