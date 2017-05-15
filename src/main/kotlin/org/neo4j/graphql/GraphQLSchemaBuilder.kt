@@ -36,27 +36,6 @@ class GraphQLSchemaBuilder {
         return newBuilder
     }
 
-    fun toGraphQL2(metaData: MetaData): GraphQLObjectType {
-        var builder: GraphQLObjectType.Builder = newObject()
-                    .name(metaData.type)
-                    .description(metaData.type + "-Node")
-
-            builder = builder.field(newFieldDefinition()
-                    .name("_id")
-                    .description("internal node id")
-                    //                    .fetchField().dataFetcher((env) -> null)
-                    .type(Scalars.GraphQLID).build())
-
-
-            // todo relationships, labels etc.
-
-            // something is off with rule-checking probably interface names conflicting with object names
-            //        builder = addInterfaces(builder);
-            builder = addProperties(metaData, builder)
-            builder = addRelationships(metaData, builder)
-            return builder.build()
-    }
-
     fun toGraphQLObjectType(metaData: MetaData, interfaceDefinitions: Map<String, GraphQLInterfaceType>) : GraphQLObjectType {
         var builder: GraphQLObjectType.Builder = newObject()
                 .name(metaData.type)
@@ -234,14 +213,14 @@ class GraphQLSchemaBuilder {
 
             val interfaceTypes = dictionary.first
             val objectTypes = dictionary.second
+            val allTypes = (objectTypes.values + interfaceTypes.values).toSet()
 
             val queryType = newObject().name("QueryType")
-                    .fields(myBuilder.queryFields(typeMetaDatas,objectTypes))
+                    .fields(myBuilder.queryFields(metaDatas,allTypes))
                     .build()
 
 
             // todo this was missing, it was only called by the builder: SchemaUtil().replaceTypeReferences(graphQLSchema)
-            val allTypes = (objectTypes.values + interfaceTypes.values).toSet()
             val schema = GraphQLSchema.Builder().mutation(mutationType).query(queryType).build(allTypes) // interfaces seem to be quite tricky
             return GraphQLSchemaWithDirectives(schema.queryType, schema.mutationType, schema.dictionary, graphQLDirectives())
         }
@@ -293,13 +272,13 @@ class GraphQLSchemaBuilder {
         return inType
     }
 
-    fun queryFields(metaDatas: Iterable<MetaData>, objectTypes: Map<String, GraphQLObjectType>): List<GraphQLFieldDefinition> {
+    fun queryFields(metaDatas: Iterable<MetaData>, objectTypes: Set<GraphQLType>): List<GraphQLFieldDefinition> {
         return metaDatas
                 .map { md ->
                     withFirstOffset(
                             newFieldDefinition()
                             .name(md.type)
-                            .type(GraphQLList(objectTypes[md.type]))
+                            .type(GraphQLList(objectTypes.filter { it.name == md.type }.firstOrNull()))
                             .argument(propertiesAsArguments(md))
                             .argument(propertiesAsListArguments(md))
                             .argument(orderByArgument(md))

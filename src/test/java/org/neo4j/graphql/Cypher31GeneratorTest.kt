@@ -180,6 +180,46 @@ head([ (`Actor`)-[:`friend`]->(`Actor_friend`:`Person`)  | `Actor_friend` {`_lab
     }
 
     @Test
+    fun includeFragments() {
+        val metaData = IDLParser.parse("""
+        interface Person {
+            name: String
+        }
+
+        type Actor implements Person {
+            name: String
+            numberOfOscars: Int
+        }
+        """)
+
+        GraphSchemaScanner.allTypes.putAll(metaData)
+
+        val generator = Cypher31Generator()
+
+        /*
+        Person {
+         ... on Actor {
+            name, numberOfOscars
+         }}
+         */
+        val selectionSet = SelectionSet(listOf<Selection>(InlineFragment(TypeName("Actor"), SelectionSet(listOf(Field("name"), Field("numberOfOscars"))))))
+
+        val field = Field("Person", selectionSet)
+
+        val query = generator.generateQueryForField(field)
+
+        // it's like a cast
+        // but perhaps we can just ignore it more or less
+        // just add a check that the fragment is valid for the label?
+        // WITH *, `Person` AS `Actor` ??
+        assertEquals(
+                """MATCH (`Person`:`Person`)
+RETURN labels(`Person`) AS `_labels`,
+`Person`.`name` AS `name`,
+`Person`.`numberOfOscars` AS `numberOfOscars`""",  query)
+    }
+
+    @Test
     @Throws(Exception::class)
     fun cypherDirectiveScalar() {
         val metaData = IDLParser.parse("""

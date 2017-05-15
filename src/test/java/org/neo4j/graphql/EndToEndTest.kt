@@ -94,26 +94,30 @@ class EndToEndTest {
 
         val query = """
             query {
-                Actor(name: "Kevin Bacon") {
+                Person(name: "Kevin Bacon") {
                     born
-                    totalMoviesCount
-                    recommendedColleagues {
-                        name
-                    }
-                    namedColleagues(name: "Meg") {
-                        name
+
+                    ... on Actor {
+                        totalMoviesCount
+                        recommendedColleagues {
+                            name
+                        }
+                        namedColleagues(name: "Meg") {
+                            name
+                        }
+                        movies {
+                            title
+                            released
+                            tagline
+                            actors {
+                                name
+                                born
+                            }
+                         }
                     }
 
                     score(value:7)
-                    movies {
-                        title
-                        released
-                        tagline
-                        actors {
-                            name
-                            born
-                        }
-                     }
+
                  }
             }
         """
@@ -126,7 +130,7 @@ class EndToEndTest {
 
         assertNull(result["errors"])
 
-        val data = result["data"]!!["Actor"]
+        val data = result["data"]!!["Person"]
 
         assertEquals(1, data?.size)
 
