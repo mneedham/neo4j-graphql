@@ -148,6 +148,36 @@ RETURN labels(`Actor`) AS `_labels`,
 `Actor`.`name` AS `name`,
 `Actor`.`numberOfOscars` AS `numberOfOscars`""",  query)
     }
+    @Test
+    fun matchIncludesLabelsProjection() {
+        val metaData = IDLParser.parse("""
+        interface Person {
+            name: String
+        }
+
+        type Actor implements Person {
+            name: String
+            friend: Person
+        }
+        """)
+
+        GraphSchemaScanner.allTypes.putAll(metaData)
+
+        val generator = Cypher31Generator()
+
+        val subSelectionSet = SelectionSet(listOf<Selection>(Field("name")))
+        val selectionSet = SelectionSet(listOf<Selection>(Field("name"), Field("friend",subSelectionSet)))
+
+        val field = Field("Actor", selectionSet)
+
+        val query = generator.generateQueryForField(field)
+
+        assertEquals(
+                """MATCH (`Actor`:`Actor`)
+RETURN labels(`Actor`) AS `_labels`,
+`Actor`.`name` AS `name`,
+head([ (`Actor`)-[:`friend`]->(`Actor_friend`:`Person`)  | `Actor_friend` {`_labels` : labels(`Actor_friend`), .`name`}]) AS `friend`""",  query)
+    }
 
     @Test
     @Throws(Exception::class)
