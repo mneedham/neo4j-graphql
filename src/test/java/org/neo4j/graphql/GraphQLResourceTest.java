@@ -110,6 +110,30 @@ public class GraphQLResourceTest {
         assertEquals(false,result.hasNext());
         result.close();
     }
+
+    @Test
+    public void testBlah() throws Exception {
+
+        GraphDatabaseService db = neo4j.graph();
+        Result idlResult = db.execute("CALL graphql.idl({idl})",map("idl","type Person { name: String, born: Int}"));
+        System.out.println( "idlResult = " + idlResult );
+
+        // and run the query in browser
+// wit remote debug -agentlib:jdwp=transport=dt_socket,server=y,suspend=n,address=5005 in neo4j.conf
+        // and then add remote debug config in the run menu
+        String query = "query { Person(born:1961) {name,born} }";
+        Result result = db.execute("CALL graphql.execute({query},{})",map("query",query));
+        assertEquals(true,result.hasNext());
+        Map<String, Object> row = result.next();
+        System.out.println("row = " + row);
+        List<Map>  data = (List<Map>) ((Map) row.get("result")).get("Person");
+        assertEquals(1,data.size());
+        assertEquals("Meg Ryan",data.get(0).get("name"));
+        assertEquals(false,result.hasNext());
+        result.close();
+    }
+
+
     @Test
     public void testSchemaProcedure() throws Exception {
         GraphDatabaseService db = neo4j.graph();

@@ -78,17 +78,30 @@ class GraphQLSchemaBuilder {
         builder = addProperties(metaData, builder)
         builder = addRelationships(metaData, builder)
 
-        builder = builder.typeResolver{ cypherResult ->
-            val row = cypherResult as Map<String,Any>?
+        builder = builder.typeResolver { cypherResult ->
+            val row = cypherResult as Map<String, Any>?
             val allLabels = row?.get("_labels") as List<String>? // so we have to add "_labels" to each node's map projection n { _labels: labels(n), ... } or we have to hard-code it from the generator
-            // but if you ask for a "Person" you don't know if it is actually a Actor or Director in the db
             // we also have to add the interfaces to the mutation on create
-            // we have to automatically add the labels for all returned nodes good question
-            // not sure if we can remove it
-            // perhaps before we return the response filter out p
             val firstRemainingLabel: String? = allLabels?.filterNot { it == interfaceName }?.firstOrNull() // would be good to have a "Node" superlabel? like Relay has
-            // we also have to add a test taht checks for labels added as map projection
-            typeResolver(firstRemainingLabel) }
+
+            if(firstRemainingLabel.isNullOrEmpty()) {
+                var builder: GraphQLObjectType.Builder = GraphQLObjectType.newObject()
+                        .name(interfaceName)
+                        .description(interfaceName + "-Node")
+
+                builder = builder.field(newFieldDefinition()
+                        .name("_id")
+                        .description("internal node id")
+                        .type(Scalars.GraphQLID).build())
+
+                builder = addProperties(metaData, builder)
+                builder = addRelationships(metaData, builder)
+                builder.build()
+            } else {
+                typeResolver(firstRemainingLabel)
+            }
+
+        }
         return builder.build()
     }
 

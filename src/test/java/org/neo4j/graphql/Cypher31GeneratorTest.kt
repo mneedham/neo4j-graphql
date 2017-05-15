@@ -27,7 +27,8 @@ class Cypher31GeneratorTest {
 
         assertEquals(
 """MATCH (`Person`:`Person`)
-RETURN `Person`.`name` AS `name`""",  query)
+RETURN labels(`Person`) AS `_labels`,
+`Person`.`name` AS `name`""",  query)
     }
 
     @Test
@@ -52,7 +53,8 @@ RETURN `Person`.`name` AS `name`""",  query)
         assertEquals(
                 """MATCH (`Person`:`Person`)
 WHERE `Person`.`name` = "Michael Hunger"
-RETURN `Person`.`name` AS `name`""",  query)
+RETURN labels(`Person`) AS `_labels`,
+`Person`.`name` AS `name`""",  query)
     }
 
     @Test
@@ -83,7 +85,8 @@ RETURN `Person`.`name` AS `name`""",  query)
                 """MATCH (`Person`:`Person`)
 WHERE `Person`.`name` IN ["Michael Hunger","Will Lyon"]
 AND `Person`.`born` = 1960
-RETURN `Person`.`name` AS `name`,
+RETURN labels(`Person`) AS `_labels`,
+`Person`.`name` AS `name`,
 `Person`.`born` AS `born`""",  query)
     }
 
@@ -114,9 +117,10 @@ RETURN `Person`.`name` AS `name`,
 
         assertEquals(
                 """MATCH (`Person`:`Person`)
-RETURN `Person`.`name` AS `name`,
+RETURN labels(`Person`) AS `_labels`,
+`Person`.`name` AS `name`,
 `Person`.`born` AS `born`,
-[ (`Person`)-[:`ACTED_IN`]->(`Person_movies`:`Movie`)  | `Person_movies` {.`title`}] AS `movies`""",  query)
+[ (`Person`)-[:`ACTED_IN`]->(`Person_movies`:`Movie`)  | `Person_movies` {`_labels` : labels(`Person_movies`), .`title`}] AS `movies`""",  query)
     }
 
     @Test
@@ -242,7 +246,8 @@ RETURN labels(`Person`) AS `_labels`,
 
         assertEquals(
                 """MATCH (`Person`:`Person`)
-RETURN graphql.run('WITH {this} AS this RETURN 2', {`this`:Person}, false) AS `score`""",  query)
+RETURN labels(`Person`) AS `_labels`,
+graphql.run('WITH {this} AS this RETURN 2', {`this`:Person}, false) AS `score`""",  query)
     }
 
     @Test
@@ -269,7 +274,8 @@ RETURN graphql.run('WITH {this} AS this RETURN 2', {`this`:Person}, false) AS `s
 
         assertEquals(
                 """MATCH (`Person`:`Person`)
-RETURN graphql.run('UNWIND range(0,5) AS value RETURN value', {`this`:Person}, true) AS `scores`,
+RETURN labels(`Person`) AS `_labels`,
+graphql.run('UNWIND range(0,5) AS value RETURN value', {`this`:Person}, true) AS `scores`,
 graphql.run('RETURN range(0,5)', {`this`:Person}, true) AS `scores2`""",  query)
     }
 
@@ -296,7 +302,8 @@ graphql.run('RETURN range(0,5)', {`this`:Person}, true) AS `scores2`""",  query)
 
         assertEquals(
                 """MATCH (`Person`:`Person`)
-RETURN head([ x IN graphql.run('WITH {this} AS this RETURN this', {`this`:Person}, true) | `x` {.`name`, .`born`} ]) AS `bestFriend`""",  query)
+RETURN labels(`Person`) AS `_labels`,
+head([ x IN graphql.run('WITH {this} AS this RETURN this', {`this`:Person}, true) | `x` {`_labels` : labels(`x`), .`name`, .`born`} ]) AS `bestFriend`""",  query)
     }
 
     @Test
@@ -322,7 +329,8 @@ RETURN head([ x IN graphql.run('WITH {this} AS this RETURN this', {`this`:Person
 
         assertEquals(
                 """MATCH (`Person`:`Person`)
-RETURN [ x IN graphql.run('WITH {this} AS this RETURN this', {`this`:Person}, true) | `x` {.`name`, .`born`} ] AS `colleagues`""",  query)
+RETURN labels(`Person`) AS `_labels`,
+[ x IN graphql.run('WITH {this} AS this RETURN this', {`this`:Person}, true) | `x` {`_labels` : labels(`x`), .`name`, .`born`} ] AS `colleagues`""",  query)
     }
 
     @Test
@@ -347,7 +355,8 @@ RETURN [ x IN graphql.run('WITH {this} AS this RETURN this', {`this`:Person}, tr
 
         assertEquals(
                 """MATCH (`Person`:`Person`)
-RETURN `Person`.`name` AS `name`,
+RETURN labels(`Person`) AS `_labels`,
+`Person`.`name` AS `name`,
 graphql.run('RETURN {value}', {`this`:Person,`value`:7}, false) AS `born`""",  query)
     }
 

@@ -103,7 +103,10 @@ class EndToEndTest {
                             name
                         }
                         namedColleagues(name: "Meg") {
-                            name
+                            ... on Actor {
+                                name
+                                totalMoviesCount
+                            }
                         }
                         movies {
                             title
