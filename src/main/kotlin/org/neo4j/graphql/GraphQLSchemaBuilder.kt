@@ -104,7 +104,11 @@ class GraphQLSchemaBuilder {
             val allLabels = row?.get("_labels") as List<String>? // so we have to add "_labels" to each node's map projection n { _labels: labels(n), ... } or we have to hard-code it from the generator
             // but if you ask for a "Person" you don't know if it is actually a Actor or Director in the db
             // we also have to add the interfaces to the mutation on create
-            val firstRemainingLabel: String? = allLabels?.filterNot { it == interfaceName }?.firstOrNull() ?: "Actor" // would be good to have a "Node" superlabel? like Relay has
+            // we have to automatically add the labels for all returned nodes good question
+            // not sure if we can remove it
+            // perhaps before we return the response filter out p
+            val firstRemainingLabel: String? = allLabels?.filterNot { it == interfaceName }?.firstOrNull() // would be good to have a "Node" superlabel? like Relay has
+            // we also have to add a test taht checks for labels added as map projection
             typeResolver(firstRemainingLabel) }
         return builder.build()
     }

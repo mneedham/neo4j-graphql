@@ -120,6 +120,36 @@ RETURN `Person`.`name` AS `name`,
     }
 
     @Test
+    fun matchIncludesLabels() {
+        val metaData = IDLParser.parse("""
+        interface Person {
+            name: String
+        }
+
+        type Actor implements Person {
+            name: String
+            numberOfOscars: Int
+        }
+        """)
+
+        GraphSchemaScanner.allTypes.putAll(metaData)
+
+        val generator = Cypher31Generator()
+
+        val selectionSet = SelectionSet(listOf<Selection>(Field("name"), Field("numberOfOscars")))
+
+        val field = Field("Actor", selectionSet)
+
+        val query = generator.generateQueryForField(field)
+
+        assertEquals(
+                """MATCH (`Actor`:`Actor`)
+RETURN labels(`Actor`) AS `_labels`,
+`Actor`.`name` AS `name`,
+`Actor`.`numberOfOscars` AS `numberOfOscars`""",  query)
+    }
+
+    @Test
     @Throws(Exception::class)
     fun cypherDirectiveScalar() {
         val metaData = IDLParser.parse("""

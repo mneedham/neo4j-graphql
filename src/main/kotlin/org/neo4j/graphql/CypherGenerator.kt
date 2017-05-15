@@ -89,7 +89,8 @@ class Cypher31Generator : CypherGenerator() {
     }
 
     fun projectSelectionFields(md: MetaData, variable: String, selectionSet: SelectionSet, orderBys: MutableList<Pair<String,Boolean>>): List<Pair<String, String>> {
-        return selectionSet.selections.filterIsInstance<Field>().mapNotNull { f ->
+        return listOf(Pair("_labels", "labels(`$variable`)")) +
+        selectionSet.selections.filterIsInstance<Field>().mapNotNull { f ->
             val field = f.name
 
             val cypherStatement = md.cypherFor(field)
