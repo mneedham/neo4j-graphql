@@ -80,10 +80,11 @@ class GraphQLSchemaBuilder {
     }
 
 
-    fun toGraphQLInterfaceType(metaData: MetaData, typeResolver: (Any) -> GraphQLObjectType? ): GraphQLInterfaceType {
+    fun toGraphQLInterfaceType(metaData: MetaData, typeResolver: (String?) -> GraphQLObjectType? ): GraphQLInterfaceType {
+        val interfaceName = metaData.type
         var builder: GraphQLInterfaceType.Builder = GraphQLInterfaceType.newInterface()
-                .name(metaData.type)
-                .description(metaData.type + "-Node")
+                .name(interfaceName)
+                .description(interfaceName + "-Node")
 
         builder = builder.field(newFieldDefinition()
                 .name("_id")
@@ -98,7 +99,13 @@ class GraphQLSchemaBuilder {
         builder = addProperties(metaData, builder)
         builder = addRelationships(metaData, builder)
 
-        builder = builder.typeResolver{ typeResolver("Actor") }
+        builder = builder.typeResolver{ cypherResult ->
+            val row = cypherResult as Map<String,Any>?
+            val allLabels = row?.get("_labels") as List<String>? // so we have to add "_labels" to each node's map projection n { _labels: labels(n), ... } or we have to hard-code it from the generator
+            // but if you ask for a "Person" you don't know if it is actually a Actor or Director in the db
+            // we also have to add the interfaces to the mutation on create
+            val firstRemainingLabel: String? = allLabels?.filterNot { it == interfaceName }?.firstOrNull() ?: "Actor" // would be good to have a "Node" superlabel? like Relay has
+            typeResolver(firstRemainingLabel) }
         return builder.build()
     }
 
@@ -302,19 +309,24 @@ class GraphQLSchemaBuilder {
 
         val updatableProperties = metaData.properties.values.filter { !it.isComputed() }
 
+        class CreateMutationDataFetcher(metaData: MetaData) : DataFetcher<String> {
+            val statement = "CREATE (node:${metaData.type}) SET node = {properties} " + metaData.labels.map { "SET node:`$it`" }.joinToString(", ")
+
+            override fun get(env: DataFetchingEnvironment): String {
+                val params = mapOf<String, Any>("properties" to updatableProperties.associate { it.fieldName to env.getArgument<Any>(it.fieldName) })
+                return executeStatement(env, statement, params)
+            }
+
+            override fun toString(): String {
+                return statement
+            }
+        }
         val createMutation = GraphQLFieldDefinition.newFieldDefinition()
                 .name("create" + metaData.type)
                 .description("Creates a ${metaData.type} entity")
                 .type(GraphQLString)
                 .argument(updatableProperties.map { GraphQLArgument(it.fieldName, graphQlInType(it.type)) })
-                .dataFetcher { env ->
-                    val params = mapOf<String, Any>("properties" to updatableProperties.associate { it.fieldName to env.getArgument<Any>(it.fieldName) })
-
-                    val statement = "CREATE (node:${metaData.type}) SET node = {properties}"
-
-                    executeStatement(env, statement,params)
-
-                }
+                .dataFetcher(CreateMutationDataFetcher(metaData))
                 .build()
 
         if (idProperty == null)
@@ -466,7 +478,7 @@ class GraphQLSchemaBuilder {
         val nonInterfaces = metaDatas.filter { !it.isInterface }
 
         val mutableObjectTypes = mutableMapOf<String,GraphQLObjectType>()
-        val interfaceDefinitions = interfaces.associate { it.type to toGraphQLInterfaceType(it, { mutableObjectTypes.get(it.toString()) }) }
+        val interfaceDefinitions = interfaces.associate { it.type to toGraphQLInterfaceType(it, { mutableObjectTypes.get(it) }) }
 
         val objectTypes = nonInterfaces.associate { it.type  to toGraphQLObjectType(it, interfaceDefinitions) }
         mutableObjectTypes.putAll(objectTypes) // kinda weird though the cyclcic dependency, we should add _labels  to the cypher result and then decide it from there, on
